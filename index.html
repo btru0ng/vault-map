@@ -3,61 +3,537 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>URL Test</title>
+    <title>Telecom Duct Map</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        #root {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+    </style>
 </head>
 <body>
-    <h1>Testing Data Loading...</h1>
-    <p id="status">Loading...</p>
-    <pre id="output"></pre>
+    <div id="root"></div>
 
-    <script>
-        // !!! IMPORTANT: REPLACE THESE URLs WITH YOUR ACTUAL GITHUB PAGES PUBLIC RAW.GITHUBUSERCONTENT.COM URLs !!!
-        // Example: "https://raw.githubusercontent.com/YOUR-USERNAME/YOUR-REPOSITORY-NAME/main/JB%20-%20Telecom%20Ducts%20Markup%20-%20Availability%203.21.2025.jpg"
-        const imageUrl = "https://raw.githubusercontent.com/btru0ng/vault-map/main/JB%20-%20Telecom%20Ducts%20Markup%20-%20Availability%203.21.2025.jpg";
-        const coordinatesUrl = "https://raw.githubusercontent.com/btru0ng/vault-map/main/Telecom%20Audit%20v1%20Doc%201.xlsx%20-%20Conduit%20Coordinates.csv";
-        const availabilityUrl = "https://raw.githubusercontent.com/btru0ng/vault-map/main/Telecom%20Audit%20v1%20Doc%201.xlsx%20-%20Conduit%20Availability%20Tracker.csv";
+    <script src="https://unpkg.com/react/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            const statusElement = document.getElementById('status');
-            const outputElement = document.getElementById('output');
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-            statusElement.textContent = "Attempting to fetch data...";
+        // Component for the Interactive Map with Hotspots
+        function InteractiveMap({ imageUrl, hotspotData }) {
+            const mapContainerRef = useRef(null);
+            const [hoveredDuctInfo, setHoveredDuctInfo] = useState(null);
+            const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
-            try {
-                // Test fetching coordinates CSV
-                const coordsResponse = await fetch(coordinatesUrl);
-                if (!coordsResponse.ok) {
-                    throw new Error(`HTTP error! status: ${coordsResponse.status} from ${coordinatesUrl}`);
+            console.log("InteractiveMap rendering. Hotspot count:", hotspotData.length, "Image URL:", imageUrl);
+
+            const handleMouseMove = (e) => {
+                setTooltipPosition({ x: e.clientX + 10, y: e.clientY + 10 });
+            };
+
+            const handleMouseEnterHotspot = (info) => {
+                setHoveredDuctInfo(info);
+            };
+
+            const handleMouseLeaveHotspot = () => {
+                setHoveredDuctInfo(null);
+            };
+
+            const tooltipStyle = {
+                position: 'fixed',
+                top: tooltipPosition.y,
+                left: tooltipPosition.x,
+                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                color: 'white',
+                padding: '10px',
+                borderRadius: '5px',
+                zIndex: 1000,
+                pointerEvents: 'none',
+                display: hoveredDuctInfo ? 'block' : 'none',
+                maxWidth: '300px',
+                boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+                wordWrap: 'break-word',
+            };
+
+            return (
+                <div 
+                    ref={mapContainerRef} 
+                    style={{ 
+                        position: 'relative', 
+                        width: 'fit-content', 
+                        height: 'fit-content',
+                        overflow: 'auto',
+                        border: '1px solid #ccc'
+                    }}
+                    onMouseMove={handleMouseMove}
+                >
+                    <img src={imageUrl} alt="Telecom Ducts Map" style={{ display: 'block', maxWidth: 'none', height: 'auto' }} />
+                    
+                    {hotspotData.map((hotspot, index) => (
+                        <div
+                            key={index}
+                            style={{
+                                position: 'absolute',
+                                top: `${hotspot.top}px`,
+                                left: `${hotspot.left}px`,
+                                width: `${hotspot.width}px`,
+                                height: `${hotspot.height}px`,
+                                backgroundColor: 'rgba(255, 255, 0, 0.3)',
+                                cursor: 'pointer',
+                                border: '1px solid rgba(255, 255, 0, 0.5)',
+                                boxSizing: 'border-box',
+                            }}
+                            onMouseEnter={() => handleMouseEnterHotspot(hotspot.duct_vault_info)}
+                            onMouseLeave={handleMouseLeaveHotspot}
+                        >
+                        </div>
+                    ))}
+
+                    {hoveredDuctInfo && (
+                        <div style={tooltipStyle}>
+                            <h4>Duct/Vault Details ({hoveredDuctInfo[0]?.Duct_Vault || 'N/A'}):</h4>
+                            {hoveredDuctInfo.map((item, index) => (
+                                <div key={index} style={{ marginBottom: '5px' }}>
+                                    Duct: {item.Duct_Number}, Status: {item.Status}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // LLM Feature Components
+        function CapacityAnalysisModal({ ductData, onClose }) {
+            const [selectedDuctVault, setSelectedDuctVault] = useState('');
+            const [analysisResult, setAnalysisResult] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            console.log("CapacityAnalysisModal rendering. Duct Data Keys:", Object.keys(ductData));
+
+            const handleAnalyze = async () => {
+                if (!selectedDuctVault) {
+                    setError('Please select a Duct/Vault.');
+                    return;
                 }
-                const coordsText = await coordsResponse.text();
-                
-                statusElement.textContent += `\\nCoordinates CSV fetched successfully. Length: ${coordsText.length}. Parsing...`;
-                outputElement.textContent = "Coordinates CSV Content (first 500 chars):\\n" + coordsText.substring(0, 500) + "\\n\\n";
+                setLoading(true);
+                setError('');
+                setAnalysisResult('');
 
-                // Test fetching availability CSV
-                const availResponse = await fetch(availabilityUrl);
-                if (!availResponse.ok) {
-                    throw new Error(`HTTP error! status: ${availResponse.status} from ${availabilityUrl}`);
+                const relevantDucts = ductData[selectedDuctVault] || [];
+                const occupiedCount = relevantDucts.filter(item => item.Status === 'Occ').length;
+                const unoccupiedCount = relevantDucts.filter(item => item.Status === 'Unocc').length;
+                const totalDucts = relevantDucts.length;
+
+                let prompt = `Analyze the capacity and usage of the telecom duct vault "${selectedDuctVault}". It has ${totalDucts} sub-ducts in total. ${occupiedCount} sub-ducts are occupied and ${unoccupiedCount} sub-ducts are unoccupied. Provide a concise summary of its current status and potential for future use.`;
+
+                try {
+                    const apiKey = ""; 
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+
+                    console.log("Calling Gemini API with prompt:", prompt);
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+
+                    console.log("Gemini API response:", result);
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        setAnalysisResult(result.candidates[0].content.parts[0].text);
+                    } else {
+                        setError('Failed to get a response from the LLM.');
+                    }
+                } catch (err) {
+                    console.error("Error calling Gemini API:", err);
+                    setError('Error communicating with the LLM. Please try again.');
+                } finally {
+                    setLoading(false);
                 }
-                const availText = await availResponse.text();
+            };
 
-                statusElement.textContent += `\\nAvailability CSV fetched successfully. Length: ${availText.length}. Parsing...`;
-                outputElement.textContent += "Availability CSV Content (first 500 chars):\\n" + availText.substring(0, 500);
+            const uniqueDuctVaults = Object.keys(ductData);
 
-                // Test fetching image
-                const imgResponse = await fetch(imageUrl);
-                if (!imgResponse.ok) {
-                    throw new Error(`HTTP error! status: ${imgResponse.status} from ${imageUrl}`);
+            return (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                        <h3 className="text-xl font-semibold mb-4">✨ Analyze Duct Capacity</h3>
+                        <select
+                            className="w-full p-2 border border-gray-300 rounded-md mb-4"
+                            value={selectedDuctVault}
+                            onChange={(e) => { setSelectedDuctVault(e.target.value); setAnalysisResult(''); setError(''); }}
+                        >
+                            <option value="">Select a Duct/Vault</option>
+                            {uniqueDuctVaults.map(name => (
+                                <option key={name} value={name}>{name}</option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={handleAnalyze}
+                            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200"
+                            disabled={selectedDuctVault === '' || loading}
+                        >
+                            {loading ? 'Analyzing...' : 'Analyze'}
+                        </button>
+                        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                        {analysisResult && (
+                            <div className="mt-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+                                <h5 className="font-medium">Analysis:</h5>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{analysisResult}</p>
+                            </div>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="mt-4 w-full bg-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-400 transition duration-200"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        function ProblemSolverModal({ onClose }) {
+            const [problemDescription, setProblemDescription] = useState('');
+            const [solutionSuggestion, setSolutionSuggestion] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const handleSuggest = async () => {
+                if (!problemDescription.trim()) {
+                    setError('Please describe the problem.');
+                    return;
                 }
-                statusElement.textContent += `\\nImage fetched successfully.`;
-                
-                statusElement.textContent = "All files fetched successfully! Check console for full content if desired.";
+                setLoading(true);
+                setError('');
+                setSolutionSuggestion('');
 
-            } catch (error) {
-                statusElement.textContent = `Error during fetch: ${error.message}`;
-                console.error("Fetch Error:", error);
+                const prompt = `A telecom technician is facing the following problem related to duct infrastructure: "${problemDescription}". Provide practical suggestions or solutions to address this problem, considering typical telecom duct work challenges. Focus on actionable advice.`;
+
+                try {
+                    const apiKey = ""; 
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                    const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }] };
+
+                    console.log("Calling Gemini API with prompt:", prompt);
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+
+                    console.log("Gemini API response:", result);
+
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        setSolutionSuggestion(result.candidates[0].content.parts[0].text);
+                    } else {
+                        setError('Failed to get a response from the LLM.');
+                    }
+                } catch (err) {
+                    console.error("Error calling Gemini API:", err);
+                    setError('Error communicating with the LLM. Please try again.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+                        <h3 className="text-xl font-semibold mb-4">✨ Suggest Solutions for Duct Problems</h3>
+                        <textarea
+                            className="w-full p-2 border border-gray-300 rounded-md mb-4 h-32 resize-y"
+                            placeholder="Describe the telecom duct problem (e.g., 'Duct 50 in T-Z05 South is blocked and I need an alternative route for a new fiber line to vault X.')"
+                            value={problemDescription}
+                            onChange={(e) => { setProblemDescription(e.target.value); setSolutionSuggestion(''); setError(''); }}
+                        />
+                        <button
+                            onClick={handleSuggest}
+                            className="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition duration-200"
+                            disabled={problemDescription.trim() === '' || loading}
+                        >
+                            {loading ? 'Suggesting...' : 'Get Suggestions'}
+                        </button>
+                        {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                        {solutionSuggestion && (
+                            <div className="mt-4 p-3 bg-gray-50 rounded-md border border-gray-200">
+                                <h5 className="font-medium">Suggestions:</h5>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap">{solutionSuggestion}</p>
+                            </div>
+                        )}
+                        <button
+                            onClick={onClose}
+                            className="mt-4 w-full bg-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-400 transition duration-200"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App Component that orchestrates the map and LLM features
+        const App = () => {
+            // !!! IMPORTANT: REPLACE THESE URLs WITH YOUR ACTUAL GITHUB PAGES PUBLIC RAW.GITHUBUSERCONTENT.COM URLs !!!
+            // Example: "https://raw.githubusercontent.com/YOUR-USERNAME/YOUR-REPOSITORY-NAME/main/JB%20-%20Telecom%20Ducts%20Markup%20-%20Availability%203.21.2025.jpg"
+            const imageUrl = "https://github.com/btru0ng/vault-map/blob/main/JB%20-%20Telecom%20Ducts%20Markup%20-%20Availability%203.21.2025.jpg";
+            const coordinatesUrl = "https://github.com/btru0ng/vault-map/raw/refs/heads/main/Telecom%20Audit%20v1%20Doc%201.xlsx%20-%20Conduit%20Coordinates.csv";
+            const availabilityUrl = "https://github.com/btru0ng/vault-map/raw/refs/heads/main/Telecom%20Audit%20v1%20Doc%201.xlsx%20-%20Conduit%20Availability%20Tracker.csv";
+
+            const [hotspotData, setHotspotData] = useState([]);
+            const [ductDataAll, setDuctDataAll] = useState({});
+            const [loadingData, setLoadingData] = useState(true);
+            const [dataError, setDataError] = useState(null);
+
+            // State for LLM modals
+            const [showCapacityModal, setShowCapacityModal] = useState(false);
+            const [showProblemSolverModal, setShowProblemSolverModal] = useState(false);
+
+            useEffect(() => {
+                console.log("App component mounted, fetching data...");
+                const fetchData = async () => {
+                    try {
+                        console.log("Attempting to fetch coordinates from:", coordinatesUrl);
+                        const coordsResponse = await fetch(coordinatesUrl);
+                        if (!coordsResponse.ok) throw new Error(`HTTP error! status: ${coordsResponse.status} from ${coordinatesUrl}`);
+                        const coordsText = await coordsResponse.text();
+                        console.log("Fetched coordinates CSV text. Length:", coordsText.length);
+                        const parsedCoords = parseCsv(coordsText);
+                        console.log("Parsed coordinates data:", parsedCoords);
+                        
+                        console.log("Attempting to fetch availability from:", availabilityUrl);
+                        const availabilityResponse = await fetch(availabilityUrl);
+                        if (!availabilityResponse.ok) throw new Error(`HTTP error! status: ${availabilityResponse.status} from ${availabilityUrl}`);
+                        const availabilityText = await availabilityResponse.text();
+                        console.log("Fetched availability CSV text. Length:", availabilityText.length);
+                        const parsedAvailability = parseAvailabilityCsv(availabilityText);
+                        console.log("Parsed availability data:", parsedAvailability);
+
+                        // Process and combine data
+                        const groupedAvailability = {};
+                        parsedAvailability.forEach(item => {
+                            if (!groupedAvailability[item.Duct_Vault]) {
+                                groupedAvailability[item.Duct_Vault] = [];
+                            }
+                            groupedAvailability[item.Duct_Vault].push({
+                                Duct_Number: item.Duct_Number,
+                                Status: item.Status
+                            });
+                        });
+                        setDuctDataAll(groupedAvailability);
+                        console.log("Grouped availability data:", groupedAvailability);
+
+                        const combinedHotspots = parsedCoords.map(coord => {
+                            const ductLabelFromMap = String(coord.Duct_Label).trim();
+                            let matchedDuctVaultName = null;
+
+                            if (ductLabelFromMap in groupedAvailability) {
+                                matchedDuctVaultName = ductLabelFromMap;
+                            } else {
+                                const ductLabelNumericMatch = ductLabelFromMap.match(/(\d+)/);
+                                if (ductLabelNumericMatch) {
+                                    const labelNum = ductLabelNumericMatch[1];
+                                    for (const dvName in groupedAvailability) {
+                                        const dvNumericPartMatch = dvName.match(/T-(\d+)/);
+                                        if (dvNumericPartMatch && dvNumericPartMatch[1] === labelNum) {
+                                            matchedDuctVaultName = dvName;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            return {
+                                label: ductLabelFromMap,
+                                top: parseFloat(coord.Top),
+                                left: parseFloat(coord.Left),
+                                width: parseFloat(coord.Width),
+                                height: parseFloat(coord.Height),
+                                duct_vault_info: matchedDuctVaultName ? groupedAvailability[matchedDuctVaultName] : [{ 'Duct_Number': 'N/A', 'Status': 'No data found' }]
+                            };
+                        });
+                        setHotspotData(combinedHotspots);
+                        console.log("Combined hotspot data:", combinedHotspots);
+
+                    } catch (error) {
+                        console.error("Error fetching or parsing data:", error);
+                        setDataError("Failed to load data. Please check console for details and ensure files are publicly accessible.");
+                    } finally {
+                        setLoadingData(false);
+                        console.log("Data loading finished. Loading state:", false);
+                    }
+                };
+
+                fetchData();
+            }, []); // Empty dependency array means this runs once on mount
+
+            // --- Custom CSV Parsing Functions ---
+            // A simple CSV parser for the coordinates file
+            const parseCsv = (csvText) => {
+                const lines = csvText.trim().split('\\n');
+                if (lines.length === 0) return [];
+                const headers = lines[0].split(',').map(h => h.trim());
+                // Handle potential empty first column from Excel export (like in coordinates.csv)
+                if (headers[0] === "") {
+                    headers.shift(); // Remove empty header
+                    lines[0] = lines[0].substring(lines[0].indexOf(',') + 1); // Adjust the header line string
+                }
+
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    // Skip empty lines
+                    if (lines[i].trim() === "") continue;
+
+                    const values = lines[i].split(',').map(v => v.trim());
+                    // Adjust values if original had empty first column
+                    let adjustedValues = [...values];
+                    if (headers.length < values.length) { // If there's an extra empty value at start
+                        adjustedValues.shift();
+                    }
+
+                    if (adjustedValues.length === headers.length) {
+                        const row = {};
+                        headers.forEach((header, index) => {
+                            row[header] = adjustedValues[index];
+                        });
+                        data.push(row);
+                    } else {
+                        console.warn(`Skipping malformed row during parseCsv: Expected ${headers.length} values, got ${adjustedValues.length}. Row: ${lines[i]}`);
+                    }
+                }
+                return data;
+            };
+
+            // A more specific CSV parser for the availability tracker
+            const parseAvailabilityCsv = (csvText) => {
+                const lines = csvText.trim().split('\\n');
+                const result = [];
+                let currentDuctVault = null;
+                let ductNumbersRow = null;
+                let statusRow = null;
+
+                for (let i = 0; i < lines.length; i++) {
+                    const cells = lines[i].split(',').map(cell => cell.trim());
+                    // Skip entirely empty lines
+                    if (cells.every(cell => cell === '')) continue;
+
+                    if (cells[0] && cells[0].startsWith('T-')) {
+                        currentDuctVault = cells[0];
+                        ductNumbersRow = null;
+                        statusRow = null;
+                    } else if (currentDuctVault) {
+                        // Check for duct numbers row (starts with a number)
+                        // This logic needs to be robust to Excel's inconsistent exports
+                        const mightBeDuctNumbers = cells.slice(1).filter(c => c !== ''); // Check from second cell onwards
+                        const allNumeric = mightBeDuctNumbers.every(c => !isNaN(parseFloat(c)));
+
+                        if (cells[0] && !isNaN(parseFloat(cells[0])) && allNumeric && !ductNumbersRow) {
+                             // This is a duct numbers row
+                            ductNumbersRow = cells;
+                        } else if (cells[0] && (cells[0] === 'Occ' || cells[0] === 'Unocc') && !statusRow) {
+                            // This is a status row
+                            statusRow = cells;
+                        }
+
+                        if (ductNumbersRow && statusRow) {
+                            // Combine duct numbers and statuses from the relevant columns
+                            // assuming they align sequentially after the first column
+                            for (let j = 1; j < ductNumbersRow.length; j++) {
+                                const ductNumber = ductNumbersRow[j];
+                                const status = statusRow[j];
+                                if (ductNumber && status && ductNumber !== '' && status !== '') {
+                                    result.push({
+                                        Duct_Vault: currentDuctVault,
+                                        Duct_Number: String(ductNumber),
+                                        Status: status
+                                    });
+                                }
+                            }
+                            ductNumbersRow = null;
+                            statusRow = null;
+                        }
+                    }
+                }
+                return result;
+            };
+
+            if (loadingData) {
+                return (
+                    <div className="flex justify-center items-center h-full">
+                        <p className="text-lg text-gray-700">Loading data from GitHub Pages...</p>
+                    </div>
+                );
             }
-        });
+
+            if (dataError) {
+                return (
+                    <div className="flex justify-center items-center h-full">
+                        <p className="text-lg text-red-500">Error: {dataError}</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="flex flex-col h-screen overflow-hidden">
+                    {/* Top bar with LLM feature buttons */}
+                    <div className="flex justify-center p-4 bg-gray-100 shadow-md z-10">
+                        <button 
+                            onClick={() => setShowCapacityModal(true)} 
+                            className="mr-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition duration-200"
+                        >
+                            ✨ Analyze Capacity
+                        </button>
+                        <button 
+                            onClick={() => setShowProblemSolverModal(true)} 
+                            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition duration-200"
+                        >
+                            ✨ Suggest Solutions
+                        </button>
+                    </div>
+
+                    {/* Main content area: Interactive Map */}
+                    <div style={{ flex: '1', overflow: 'hidden' }}>
+                        <InteractiveMap imageUrl={imageUrl} hotspotData={hotspotData} />
+                    </div>
+
+                    {/* Modals for LLM features */}
+                    {showCapacityModal && (
+                        <CapacityAnalysisModal
+                            ductData={ductDataAll} // Pass fetched data to LLM modal
+                            onClose={() => setShowCapacityModal(false)}
+                        />
+                    )}
+                    {showProblemSolverModal && (
+                        <ProblemSolverModal
+                            onClose={() => setShowProblemSolverModal(false)}
+                        />
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
 </html>
